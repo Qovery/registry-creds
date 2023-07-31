@@ -448,32 +448,44 @@ func handler(c *controller, ns *v1.Namespace) error {
 }
 
 func main() {
-	logrus.Info("Starting up...")
-	err := flags.Parse(os.Args)
-	if err != nil {
-		logrus.Fatalf("Could not parse command line arguments! [Err: %s]", err)
+	for {
+		logrus.Info("Starting up...")
+		err := flags.Parse(os.Args)
+		if err != nil {
+			logrus.Fatalf("Could not parse command line arguments! [Err: %s]", err)
+		}
+
+		validateParams()
+
+		logrus.Info("Using AWS Account: ", strings.Join(awsAccountIDs, ","))
+		logrus.Info("Using AWS Region: ", *argAWSRegion)
+		logrus.Info("Using AWS Assume Role: ", *argAWSAssumeRole)
+		logrus.Info("Refresh Interval (minutes): ", *argRefreshMinutes)
+		logrus.Infof("Retry Timer: %s", RetryCfg.Type)
+		logrus.Info("Token Generation Retries: ", RetryCfg.NumberOfRetries)
+		logrus.Info("Token Generation Retry Delay (seconds): ", RetryCfg.RetryDelayInSeconds)
+
+		util, err := k8sutil.New(*argKubecfgFile, *argKubeMasterURL)
+
+		if err != nil {
+			logrus.Error("Could not create k8s client!!", err)
+		}
+
+		ecrClient := newEcrClient()
+		c := &controller{util, ecrClient}
+
+		stopC := make(chan struct{})
+		go util.WatchNamespaces(time.Duration(*argRefreshMinutes)*time.Minute, func(ns *v1.Namespace) error {
+			return handler(c, ns)
+		}, stopC)
+
+		time.Sleep(time.Hour)
+
+		// Sending stop signal
+		logrus.Info("Restarting process...")
+		stopC <- struct{}{}
+
+		// Wait a bit to let the signal propagate
+		time.Sleep(time.Second * 10)
 	}
-
-	validateParams()
-
-	logrus.Info("Using AWS Account: ", strings.Join(awsAccountIDs, ","))
-	logrus.Info("Using AWS Region: ", *argAWSRegion)
-	logrus.Info("Using AWS Assume Role: ", *argAWSAssumeRole)
-	logrus.Info("Refresh Interval (minutes): ", *argRefreshMinutes)
-	logrus.Infof("Retry Timer: %s", RetryCfg.Type)
-	logrus.Info("Token Generation Retries: ", RetryCfg.NumberOfRetries)
-	logrus.Info("Token Generation Retry Delay (seconds): ", RetryCfg.RetryDelayInSeconds)
-
-	util, err := k8sutil.New(*argKubecfgFile, *argKubeMasterURL)
-
-	if err != nil {
-		logrus.Error("Could not create k8s client!!", err)
-	}
-
-	ecrClient := newEcrClient()
-	c := &controller{util, ecrClient}
-
-	util.WatchNamespaces(time.Duration(*argRefreshMinutes)*time.Minute, func(ns *v1.Namespace) error {
-		return handler(c, ns)
-	})
 }
