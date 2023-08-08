@@ -59,17 +59,18 @@ const (
 )
 
 var (
-	flags                    = flag.NewFlagSet("", flag.ContinueOnError)
-	argKubecfgFile           = flags.String("kubecfg-file", "", `Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens`)
-	argKubeMasterURL         = flags.String("kube-master-url", "", `URL to reach kubernetes master. Env variables in this flag will be expanded.`)
-	argAWSSecretName         = flags.String("aws-secret-name", "awsecr-cred", `Default AWS secret name`)
-	argAWSRegion             = flags.String("aws-region", "us-east-1", `Default AWS region`)
-	argRefreshMinutes        = flags.Int("refresh-mins", 60, `Default time to wait before refreshing (60 minutes)`)
-	argSkipKubeSystem        = flags.Bool("skip-kube-system", true, `If true, will not attempt to set ImagePullSecrets on the kube-system namespace`)
-	argAWSAssumeRole         = flags.String("aws_assume_role", "", `If specified AWS will assume this role and use it to retrieve tokens`)
-	argTokenGenFxnRetryType  = flags.String("token-retry-type", defaultTokenGenRetryType, `The type of retry timer to use when generating a secret token; either simple or exponential (simple)`)
-	argTokenGenFxnRetries    = flags.Int("token-retries", defaultTokenGenRetries, `Default number of times to retry generating a secret token (3)`)
-	argTokenGenFxnRetryDelay = flags.Int("token-retry-delay", defaultTokenGenRetryDelay, `Default number of seconds to wait before retrying secret token generation (5 seconds)`)
+	flags                      = flag.NewFlagSet("", flag.ContinueOnError)
+	argRestartProcessInMinutes = flags.Int("restart-process-in-minutes", 30, `Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens`)
+	argKubecfgFile             = flags.String("kubecfg-file", "", `Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens`)
+	argKubeMasterURL           = flags.String("kube-master-url", "", `URL to reach kubernetes master. Env variables in this flag will be expanded.`)
+	argAWSSecretName           = flags.String("aws-secret-name", "awsecr-cred", `Default AWS secret name`)
+	argAWSRegion               = flags.String("aws-region", "us-east-1", `Default AWS region`)
+	argRefreshMinutes          = flags.Int("refresh-mins", 60, `Default time to wait before refreshing (60 minutes)`)
+	argSkipKubeSystem          = flags.Bool("skip-kube-system", true, `If true, will not attempt to set ImagePullSecrets on the kube-system namespace`)
+	argAWSAssumeRole           = flags.String("aws_assume_role", "", `If specified AWS will assume this role and use it to retrieve tokens`)
+	argTokenGenFxnRetryType    = flags.String("token-retry-type", defaultTokenGenRetryType, `The type of retry timer to use when generating a secret token; either simple or exponential (simple)`)
+	argTokenGenFxnRetries      = flags.Int("token-retries", defaultTokenGenRetries, `Default number of times to retry generating a secret token (3)`)
+	argTokenGenFxnRetryDelay   = flags.Int("token-retry-delay", defaultTokenGenRetryDelay, `Default number of seconds to wait before retrying secret token generation (5 seconds)`)
 )
 
 var (
@@ -457,6 +458,7 @@ func main() {
 
 		validateParams()
 
+		logrus.Info("Refreshing token every %d", *argRestartProcessInMinutes)
 		logrus.Info("Using AWS Account: ", strings.Join(awsAccountIDs, ","))
 		logrus.Info("Using AWS Region: ", *argAWSRegion)
 		logrus.Info("Using AWS Assume Role: ", *argAWSAssumeRole)
@@ -479,7 +481,7 @@ func main() {
 			return handler(c, ns)
 		}, stopC)
 
-		time.Sleep(time.Hour)
+		time.Sleep(time.Duration(*argRestartProcessInMinutes) * time.Minute)
 
 		// Sending stop signal
 		logrus.Info("Restarting process...")
