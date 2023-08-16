@@ -485,6 +485,7 @@ func main() {
 
 		// Sending stop signal
 		logrus.Info("Restarting process...")
+		os.Exit(0)
 		stopC <- struct{}{}
 
 		// Wait a bit to let the signal propagate
